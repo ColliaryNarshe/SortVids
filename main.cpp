@@ -51,52 +51,26 @@ std::vector<std::string> splitString(std::string_view str,
 // Returns a map with they dir and keywords divided. map<dir,keywords>
 std::vector<Keywords> parseLines(const std::vector<std::string>& lines);
 
-
 void printFilenames(const std::vector<Match>& filenamePairs);
 
-
 void renameFilenames(const std::vector<Match>& filenamePairs);
-
 
 // Creates list of files to rename: std::pair<file, new location>
 bool getFilesToRename(Data& data, Keywords& keywords,
                       std::vector<Match>& matches);
 
-
-
-void createDataFile()
-{
-    std::string path{"sortvidKeywords.txt"};
-    if (fs::exists(path))
-        path = "sortvidKeywords1.txt";
-
-    std::ofstream fileData{path};
-
-    fileData << "files: .\\\n";
-
-    std::string query{};
-    while (true)
-    {
-        std::cout << "Enter a destination folder or q to quit:\n";
-        getline(std::cin, query);
-        if (query == "q")
-            break;
-        fileData << query << ", ";
-        std::cout << "Enter keywords separated by comas:\n";
-        getline(std::cin, query);
-        fileData << query << '\n';
-    }
-
-    fileData.close();
-}
+// Creates the data file with input from user
+void createDataFile();
 
 
 int main(int argc, char* argv[]){
     std::string filePath{"sortvidKeywords.txt"};
     
+    // Use command line to change datafile name
     if (argc > 1)
         filePath = argv[1];
     
+    // Option to create data file if not found
     else if (!fs::exists(filePath))
     {
         std::cout << "Data file not found: " << filePath << '\n';
@@ -108,6 +82,7 @@ int main(int argc, char* argv[]){
         return 0;
     }
 
+    // structs
     Data data{};
     Keywords keywords{};
 
@@ -120,6 +95,7 @@ int main(int argc, char* argv[]){
     if (!getFilesToRename(data, keywords, matches))
         return 0;
 
+    // Print what will be moved and option to quit
     printFilenames(matches);
     std::cout << "\nWould you like to move the file(s)? Enter q to quit.\n";
     std::string query{};
@@ -127,6 +103,7 @@ int main(int argc, char* argv[]){
     if (query == "q")
         return 0;
     
+    // Move the files
     renameFilenames(matches);
     std::cout << "File(s) moved.\n";
 
@@ -166,7 +143,7 @@ std::set<fs::path> getFilenames(fs::path dir)
     return filePaths;
 }
 
-
+// =========Functions===================================
 
 // Returns a vector with lines from a text file.
 std::vector<std::string> getFileLines(const std::string& path)
@@ -192,12 +169,14 @@ std::vector<std::string> getFileLines(const std::string& path)
     return lines;
 }
 
+
 std::string removeSpace(std::string s)
 {
     s.erase(s.find_last_not_of(' ') + 1);
     s.erase( 0, s.find_first_not_of(' ') );
     return s;
 }
+
 
 std::vector<std::string> splitString(std::string_view str, 
                                      std::string_view delimiter, 
@@ -227,7 +206,6 @@ std::vector<std::string> splitString(std::string_view str,
 }
 
 
-
 std::vector<Keywords> parseLines(const std::vector<std::string>& lines)
 {
     std::vector<Keywords> keywordVector{};
@@ -243,7 +221,6 @@ std::vector<Keywords> parseLines(const std::vector<std::string>& lines)
 }
 
 
-
 void printFilenames(const std::vector<Match>& filenamePairs)
 {
     for (auto& match: filenamePairs)
@@ -252,7 +229,6 @@ void printFilenames(const std::vector<Match>& filenamePairs)
             << "\n\t-----> " << match.newPath.parent_path().filename() << '\n';
     }
 }
-
 
 
 void renameFilenames(const std::vector<Match>& filenamePairs)
@@ -283,7 +259,6 @@ void checkDestinations(std::vector<Keywords>& keywords)
             keywords.erase(keywords.begin() + idx);
             badPath = true;
         }
-
     }
     if (badPath)
     {
@@ -323,11 +298,9 @@ bool getFilesToRename(Data& data, Keywords& keywords,
                 new_filename /= filename.filename();
                 Match x{{filename},{new_filename}};
                 matches.push_back(x);
-
             }
         }
     }
-
     if (!count)
     {
         std::cout << "No files found.\n\n";
@@ -336,3 +309,29 @@ bool getFilesToRename(Data& data, Keywords& keywords,
         return true;
 }
 
+
+void createDataFile()
+{
+    std::string path{"sortvidKeywords.txt"};
+    if (fs::exists(path))
+        path = "sortvidKeywords1.txt";
+
+    std::ofstream fileData{path};
+
+    fileData << "files: .\\\n";
+
+    std::string query{};
+    while (true)
+    {
+        std::cout << "Enter a destination folder or q to quit:\n";
+        getline(std::cin, query);
+        if (query == "q")
+            break;
+        fileData << query << ", ";
+        std::cout << "Enter keywords separated by comas:\n";
+        getline(std::cin, query);
+        fileData << query << '\n';
+    }
+
+    fileData.close();
+}
