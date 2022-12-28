@@ -1,4 +1,5 @@
 #include <algorithm> // for transform
+#include <array>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -9,10 +10,31 @@
 #include <vector>
 namespace fs = std::filesystem;
 
-std::set<fs::path> getFilenames(std::string_view dir);
+struct Data
+{
+    std::vector<std::string> fileLines{};
+    fs::path searchDirectory{};
+    std::set<fs::path> allFiles{};
+};
+
+struct Keywords
+{
+    fs::path destination{};
+    std::vector<std::string> keywords{};
+
+};
+
+struct Match
+{
+    fs::path oldPath{};
+    fs::path newPath{};
+};
+
+
+std::set<fs::path> getFilenames(fs::path dir);
 
 // Checks filenames against a vector of keywords
-bool checkFilenames( const fs::path& filename, const std::pair< fs::path, std::vector<std::string> >& pair );
+bool checkFilenames( const fs::path& filename, const Keywords& kw );
 
 // Returns a vector with lines from a text file.
 std::vector<std::string> getFileLines(const std::string& path);
@@ -27,56 +49,103 @@ std::vector<std::string> splitString(std::string_view str,
 
 // Takes vector string lines, each with path to show dir and keywords to search for
 // Returns a map with they dir and keywords divided. map<dir,keywords>
-std::map< fs::path, std::vector<std::string> > parseLines(const std::vector<std::string>& lines);
+std::vector<Keywords> parseLines(const std::vector<std::string>& lines);
 
 
-void printFilenames(const std::vector<std::pair<fs::path, fs::path>>& filenamePairs);
+void printFilenames(const std::vector<Match>& filenamePairs);
 
 
-void renameFilenames(const std::vector<std::pair<fs::path, fs::path>>& filenamePairs);
+void renameFilenames(const std::vector<Match>& filenamePairs);
 
 
 // Creates list of files to rename: std::pair<file, new location>
-bool getFilesToRename(std::vector<std::string>& lineVector, 
-                      std::vector< std::pair<fs::path, fs::path> >& newFilenames);
+bool getFilesToRename(Data& data, Keywords& keywords,
+                      std::vector<Match>& matches);
 
 
-int main(){
+
+void createDataFile()
+{
+    std::string path{"sortvidKeywords.txt"};
+    if (fs::exists(path))
+        path = "sortvidKeywords1.txt";
+
+    std::ofstream fileData{path};
+
+    fileData << "files: .\\\n";
+
+    std::string query{};
+    while (true)
+    {
+        std::cout << "Enter a destination folder or q to quit:\n";
+        getline(std::cin, query);
+        if (query == "q")
+            break;
+        fileData << query << ", ";
+        std::cout << "Enter keywords separated by comas:\n";
+        getline(std::cin, query);
+        fileData << query << '\n';
+    }
+
+    fileData.close();
+}
+
+
+int main(int argc, char* argv[]){
+    std::string filePath{"sortvidKeywords.txt"};
+    
+    if (argc > 1)
+        filePath = argv[1];
+    
+    else if (!fs::exists(filePath))
+    {
+        std::cout << "Data file not found: " << filePath << '\n';
+        std::cout << "Would you like to create one? y/n\n";
+        std::string query{};
+        getline(std::cin, query);
+            if (query == "y")
+                createDataFile();
+        return 0;
+    }
+
+    Data data{};
+    Keywords keywords{};
+
     // Extract lines from data file:
-    std::vector<std::string> lineVector = getFileLines(".\\sortvidKeywords.txt");
+    data.fileLines = getFileLines(filePath);
     std::cout << '\n';
 
     // Get list of matching files
-    std::vector< std::pair<fs::path, fs::path> > newFilenames{};
-    if (!getFilesToRename(lineVector, newFilenames))
+    std::vector<Match> matches{};
+    if (!getFilesToRename(data, keywords, matches))
         return 0;
 
-    printFilenames(newFilenames);
+    printFilenames(matches);
     std::cout << "\nWould you like to move the file(s)? Enter q to quit.\n";
     std::string query{};
     getline(std::cin, query);
     if (query == "q")
         return 0;
     
-    renameFilenames(newFilenames);
-    std::cout << "File(s) moved.\n\n";
+    renameFilenames(matches);
+    std::cout << "File(s) moved.\n";
 
     return 0;
 }
 
 
 
-bool checkFilenames( const fs::path& filename, const std::pair< fs::path, std::vector<std::string> >& pair )
+bool checkFilenames( const fs::path& filename, const Keywords& kw )
 {
     // check if file exists and omit destination from match check:
-    if ((pair.first.filename() == filename.filename()))
+    if ((kw.destination.filename() == filename.filename()))
         return false;
     
     // Transform filename to lowercase
     std::string fileLower{ filename.filename().string() };
     transform(fileLower.begin(), fileLower.end(), fileLower.begin(), ::tolower);
 
-    for (std::string word: pair.second)
+    for (std::string word: kw.keywords)
     {
         transform(word.begin(), word.end(), word.begin(), ::tolower);
         if ( fileLower.find(word) == std::string::npos)
@@ -86,7 +155,7 @@ bool checkFilenames( const fs::path& filename, const std::pair< fs::path, std::v
 }
 
 
-std::set<fs::path> getFilenames(std::string_view dir)
+std::set<fs::path> getFilenames(fs::path dir)
 {
     std::set<fs::path> filePaths{};
 
@@ -159,57 +228,59 @@ std::vector<std::string> splitString(std::string_view str,
 
 
 
-std::map< fs::path, std::vector<std::string> > parseLines(const std::vector<std::string>& lines)
+std::vector<Keywords> parseLines(const std::vector<std::string>& lines)
 {
-    std::map< fs::path, std::vector<std::string> > fileMap{};
+    std::vector<Keywords> keywordVector{};
 
     for(auto line: lines)
     {
         std::vector<std::string> keywords{ splitString(line, ",", true) };
-        fs::path showPath{keywords[0]};
+        fs::path destPath{keywords[0]};
         keywords.erase(keywords.begin());
-        std::pair<fs::path, std::vector<std::string> > combined{showPath, keywords};
-        fileMap.insert( combined );
+        keywordVector.push_back( {{destPath}, {keywords}} );
     }
-    return fileMap;
+    return keywordVector;
 }
 
 
 
-void printFilenames(const std::vector<std::pair<fs::path, fs::path>>& filenamePairs)
+void printFilenames(const std::vector<Match>& filenamePairs)
 {
-    for (auto& pair: filenamePairs)
+    for (auto& match: filenamePairs)
     {
-        std::cout << pair.first.filename() 
-            << "\n\t-----> " << pair.second.parent_path().filename() << '\n';
+        std::cout << match.oldPath.filename() 
+            << "\n\t-----> " << match.newPath.parent_path().filename() << '\n';
     }
 }
 
 
 
-void renameFilenames(const std::vector<std::pair<fs::path, fs::path>>& filenamePairs)
+void renameFilenames(const std::vector<Match>& filenamePairs)
 {
-    for (auto& pair: filenamePairs)
+    for (auto& match: filenamePairs)
     {
         try
-            { fs::rename(pair.first, pair.second); }
+            { fs::rename(match.oldPath, match.newPath); }
         catch(std::exception& e)
-            { std::cout << e.what() << '\n'; }
+            { std::cout << "Could not rename file: " << e.what() << '\n'; }
     }
 }
 
 
-void checkDestinations(std::map< fs::path, std::vector<std::string> >& fileMap)
+void checkDestinations(std::vector<Keywords>& keywords)
 {
     bool badPath{};
+    int16_t idx{};
+    std::vector<Keywords> keywords_copy{keywords};
 
-    for (std::pair pair: fileMap)
+    for (auto& keys: keywords_copy)
     {
+        ++idx;
         // check if file exists
-        if( !fs::exists(pair.first) )
+        if( !fs::exists(keys.destination) )
         {
-            std::cout << "Path doesn't exist: " << pair.first << "\n\n";
-            fileMap.erase(pair.first);
+            std::cout << "Path doesn't exist: " << keys.destination << '\n';
+            keywords.erase(keywords.begin() + idx);
             badPath = true;
         }
 
@@ -222,35 +293,37 @@ void checkDestinations(std::map< fs::path, std::vector<std::string> >& fileMap)
 }
 
 
-bool getFilesToRename(std::vector<std::string>& lineVector, 
-                      std::vector< std::pair<fs::path, fs::path> >& newFilenames)
+bool getFilesToRename(Data& data, Keywords& keywords,
+                      std::vector<Match>& matches)
 {
     // Get the filePath to directory of files
-    std::string filePath = lineVector[0];
-    lineVector.erase(lineVector.begin());
-    filePath = filePath.substr(7);
+    std::string filePath = data.fileLines[0];
+    data.fileLines.erase(data.fileLines.begin());
+    data.searchDirectory = filePath.substr(7);
 
     // Get list of filenames in file origin directory
-    std::set<fs::path> filenames = getFilenames(filePath);
+    data.allFiles = getFilenames(data.searchDirectory);
 
     // Create map with destination path and keywords
-    std::map< fs::path, std::vector<std::string> > fileMap{parseLines(lineVector)};
-    checkDestinations(fileMap);
+    std::vector<Keywords> keywordVector{parseLines(data.fileLines)};
+    checkDestinations(keywordVector);
 
     int16_t count{};
 
-    for (const fs::path& filename: filenames) 
+    for (const fs::path& filename: data.allFiles) 
     {
         // Loop through map of files
-        for (auto pair: fileMap)
+        for (auto kw: keywordVector)
         {
             // Check for matches
-            if ( checkFilenames(filename, pair ) )
+            if ( checkFilenames(filename, kw ) )
             {
                 ++count;
-                fs::path new_filename{pair.first};
+                fs::path new_filename{kw.destination};
                 new_filename /= filename.filename();
-                newFilenames.push_back(std::pair(filename, new_filename));
+                Match x{{filename},{new_filename}};
+                matches.push_back(x);
+
             }
         }
     }
